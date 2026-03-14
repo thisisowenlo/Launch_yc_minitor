@@ -445,11 +445,13 @@ class YCMonitorApp {
     const industryCount = {};
 
     this.companies.forEach((c) => {
-      const industries = c.industries || [];
-      if (industries.length === 0) {
+      const labels = [...(c.industries || []), ...(c.tags || [])];
+      if (labels.length === 0) {
         industryCount["Unspecified"] = (industryCount["Unspecified"] || 0) + 1;
       }
-      industries.forEach((ind) => {
+      // Deduplicate per company so each company counts once per label
+      const unique = [...new Set(labels)];
+      unique.forEach((ind) => {
         industryCount[ind] = (industryCount[ind] || 0) + 1;
       });
     });
@@ -520,14 +522,14 @@ class YCMonitorApp {
       result = result.filter((c) => this.isFavorite(c));
     }
 
-    // Industry filter (multi-select: show companies matching ANY selected industry)
+    // Industry/tag filter (multi-select: show companies matching ANY selected label)
     if (this.selectedIndustries.size > 0) {
       result = result.filter((c) => {
-        const industries = c.industries || [];
+        const labels = [...(c.industries || []), ...(c.tags || [])];
         if (this.selectedIndustries.has("Unspecified")) {
-          if (industries.length === 0) return true;
+          if (labels.length === 0) return true;
         }
-        return industries.some((ind) => this.selectedIndustries.has(ind));
+        return labels.some((ind) => this.selectedIndustries.has(ind));
       });
     }
 
