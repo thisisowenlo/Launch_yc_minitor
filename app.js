@@ -243,12 +243,11 @@ class YCMonitorApp {
       return b ? b.label : "";
     }).filter(Boolean);
     document.getElementById("batchName").textContent = labels.join(", ") || "-";
-    document.getElementById("lastSync").textContent = new Date().toLocaleDateString("zh-TW", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    document.getElementById("batchName").title = labels.join(", ");
+    const now = new Date();
+    const syncDate = `${now.getMonth() + 1}/${now.getDate()}`;
+    const syncTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    document.getElementById("lastSync").textContent = `${syncDate} ${syncTime}`;
   }
 
   buildFilterChips() {
