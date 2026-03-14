@@ -631,7 +631,64 @@ body {
 
 @media (min-width: 1024px) {
   body {
-    max-width: 800px;
+    max-width: 1200px;
     margin: 0 auto;
+  }
+
+  .app-header {
+    border-radius: 0 0 16px 16px;
+  }
+
+  .controls {
+    border-radius: 0 0 12px 12px;
+  }
+
+  .company-list {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .content {
+    padding: 16px 24px;
+    padding-bottom: calc(var(--nav-height) + 24px);
+  }
+
+  .bottom-nav {
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 1200px;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+  }
+
+  /* Modal centered on desktop */
+  .modal-overlay {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal {
+    max-width: 640px;
+    max-height: 80vh;
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .filter-chips {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 1440px) {
+  body {
+    max-width: 1400px;
+  }
+
+  .bottom-nav {
+    max-width: 1400px;
+  }
+
+  .company-list {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
