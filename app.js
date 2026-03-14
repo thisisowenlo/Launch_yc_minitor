@@ -117,7 +117,7 @@ class YCMonitorApp {
     this.filteredCompanies = [];
     this.defaultBatchIndex = getDefaultBatchIndex();
     this.selectedBatches = new Set([BATCHES[this.defaultBatchIndex].id]);
-    this.currentIndustry = "all";
+    this.selectedIndustries = new Set(); // empty = "all"
     this.currentView = "list";
     this.searchQuery = "";
 
@@ -151,7 +151,7 @@ class YCMonitorApp {
       this.selectedBatches.add(batchId);
     }
     this.renderBatchChips();
-    this.currentIndustry = "all";
+    this.selectedIndustries.clear();
     this.loadData();
   }
 
@@ -278,11 +278,12 @@ class YCMonitorApp {
     const visible = showAll ? sorted : sorted.slice(0, INITIAL_COUNT);
     const hasMore = sorted.length > INITIAL_COUNT;
 
-    let html = `<button class="chip ${this.currentIndustry === "all" ? "active" : ""}" data-industry="all" onclick="app.filterByIndustry('all')">全部<span class="chip-count">${this.companies.length}</span></button>`;
+    const isAll = this.selectedIndustries.size === 0;
+    let html = `<button class="chip ${isAll ? "active" : ""}" data-industry="all" onclick="app.filterByIndustry('all')">全部<span class="chip-count">${this.companies.length}</span></button>`;
 
     visible.forEach(([ind, count]) => {
       const zh = translateIndustry(ind);
-      const active = this.currentIndustry === ind ? "active" : "";
+      const active = this.selectedIndustries.has(ind) ? "active" : "";
       html += `<button class="chip ${active}" data-industry="${ind}" onclick="app.filterByIndustry('${ind.replace(/'/g, "\\'")}')">${zh}<span class="chip-count">${count}</span></button>`;
     });
 
@@ -301,25 +302,32 @@ class YCMonitorApp {
   }
 
   filterByIndustry(industry) {
-    this.currentIndustry = industry;
-    // Update chip states
-    document.querySelectorAll(".chip").forEach((chip) => {
-      chip.classList.toggle("active", chip.dataset.industry === industry);
-    });
+    if (industry === "all") {
+      this.selectedIndustries.clear();
+    } else {
+      if (this.selectedIndustries.has(industry)) {
+        this.selectedIndustries.delete(industry);
+      } else {
+        this.selectedIndustries.add(industry);
+      }
+    }
+    // Re-render chips to update active states
+    const chips = document.getElementById("filterChips");
+    this._renderChips(chips, this._allIndustries);
     this.applyFilters();
   }
 
   applyFilters() {
     let result = [...this.companies];
 
-    // Industry filter
-    if (this.currentIndustry !== "all") {
+    // Industry filter (multi-select: show companies matching ANY selected industry)
+    if (this.selectedIndustries.size > 0) {
       result = result.filter((c) => {
         const industries = c.industries || [];
-        if (this.currentIndustry === "Unspecified") {
-          return industries.length === 0;
+        if (this.selectedIndustries.has("Unspecified")) {
+          if (industries.length === 0) return true;
         }
-        return industries.includes(this.currentIndustry);
+        return industries.some((ind) => this.selectedIndustries.has(ind));
       });
     }
 
@@ -431,8 +439,8 @@ class YCMonitorApp {
     const container = document.getElementById("industrySummary");
     const chart = document.getElementById("industryChart");
 
-    // Only show when "全部" filter is active and there are companies
-    if (this.currentView !== "list" || this.companies.length === 0 || this.currentIndustry !== "all" || this.searchQuery) {
+    // Only show when no industry filter is active and there are companies
+    if (this.currentView !== "list" || this.companies.length === 0 || this.selectedIndustries.size > 0 || this.searchQuery) {
       container.style.display = "none";
       return;
     }
@@ -480,9 +488,7 @@ class YCMonitorApp {
     const oneLiner = company.one_liner || "無描述";
     const longDesc = company.long_description || company.one_liner || "暫無詳細描述";
     const website = company.website || "";
-    const ycUrl = company.url
-      ? `https://www.ycombinator.com${company.url}`
-      : "";
+    const ycUrl = company.url || "";
     const teamSize = company.team_size || "未知";
     const status = translateStatus(company.status);
     const stage = translateStage(company.stage);
