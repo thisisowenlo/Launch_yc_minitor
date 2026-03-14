@@ -34,10 +34,13 @@ body {
 .app-header {
   background: linear-gradient(135deg, var(--primary) 0%, #ff8533 100%);
   color: white;
-  padding: 16px 16px 0;
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+.header-inner {
+  padding: 16px 16px 0;
 }
 
 .header-top h1 {
@@ -82,11 +85,19 @@ body {
 /* Controls */
 .controls {
   background: var(--card-bg);
-  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: var(--header-height);
   z-index: 99;
+}
+
+.controls-inner {
+  padding: 12px 16px;
+}
+
+.controls-top-row {
+  display: flex;
+  flex-direction: column;
 }
 
 .search-bar {
@@ -627,20 +638,33 @@ body {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
   }
+
+  /* Search and batch selector side by side */
+  .controls-top-row {
+    flex-direction: row;
+    gap: 12px;
+  }
+
+  .search-bar {
+    flex: 1;
+    margin-bottom: 10px;
+  }
+
+  .batch-selector {
+    width: 240px;
+    flex-shrink: 0;
+    margin-bottom: 10px;
+  }
 }
 
 @media (min-width: 1024px) {
-  body {
+  /* Constrain inner content, not the full-width elements */
+  .header-inner,
+  .controls-inner,
+  .content {
     max-width: 1200px;
-    margin: 0 auto;
-  }
-
-  .app-header {
-    border-radius: 0 0 16px 16px;
-  }
-
-  .controls {
-    border-radius: 0 0 12px 12px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .company-list {
@@ -649,16 +673,45 @@ body {
   }
 
   .content {
-    padding: 16px 24px;
+    padding: 20px 32px;
     padding-bottom: calc(var(--nav-height) + 24px);
   }
 
+  .controls-inner {
+    padding: 12px 32px;
+  }
+
+  .header-inner {
+    padding: 16px 32px 0;
+  }
+
+  /* Bottom nav constrained */
   .bottom-nav {
     left: 50%;
     transform: translateX(-50%);
-    max-width: 1200px;
+    max-width: 600px;
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+  }
+
+  .nav-btn {
+    font-size: 12px;
+  }
+
+  .nav-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Card hover effect on desktop */
+  .company-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--primary);
+  }
+
+  .company-card:active {
+    transform: scale(0.99);
   }
 
   /* Modal centered on desktop */
@@ -677,14 +730,21 @@ body {
   .filter-chips {
     flex-wrap: wrap;
   }
+
+  /* Larger stats on desktop */
+  .stat-value {
+    font-size: 22px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
 }
 
 @media (min-width: 1440px) {
-  body {
-    max-width: 1400px;
-  }
-
-  .bottom-nav {
+  .header-inner,
+  .controls-inner,
+  .content {
     max-width: 1400px;
   }
 
