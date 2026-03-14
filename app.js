@@ -217,7 +217,7 @@ class YCMonitorApp {
 
     // View
     const v = params.get("v");
-    if (v && ["list", "trends", "about"].includes(v)) {
+    if (v && ["list", "favorites", "trends", "about"].includes(v)) {
       this.currentView = v;
     }
 
@@ -485,6 +485,7 @@ class YCMonitorApp {
     }
 
     container.innerHTML = html;
+    container.classList.toggle("expanded", showAll);
   }
 
   toggleChips() {
@@ -862,11 +863,42 @@ class YCMonitorApp {
         </div>
       `;
       this.applyFilters();
+    } else if (view === "favorites") {
+      this.renderFavorites(content);
     } else if (view === "trends") {
       this.renderTrends(content);
     } else if (view === "about") {
       this.renderAbout(content);
     }
+  }
+
+  renderFavorites(container) {
+    const favCompanies = this.companies.filter((c) => this.isFavorite(c));
+
+    if (favCompanies.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state" style="display:block">
+          <p style="font-size:40px;margin-bottom:12px">&#9825;</p>
+          <p>還沒有收藏的公司</p>
+          <p style="font-size:13px;color:var(--text-tertiary);margin-top:8px">在新創列表中點擊愛心即可收藏</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Store favorites in filteredCompanies so showDetail works
+    this.filteredCompanies = favCompanies;
+
+    container.innerHTML = `
+      <div style="padding-top:8px">
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">我的收藏 (${favCompanies.length})</h2>
+      </div>
+      <div class="company-list" id="companyList">
+        ${favCompanies.map((company, i) => this.renderCard(company, i)).join("")}
+      </div>
+    `;
+
+    this._translateCardOneLiners();
   }
 
   renderTrends(container) {
