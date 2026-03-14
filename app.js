@@ -3,6 +3,51 @@ const API_BASE = "https://yc-oss.github.io/api";
 // Translation cache and function for English -> Traditional Chinese
 const _translationCache = {};
 
+// Split text into chunks at sentence boundaries (for APIs with char limits)
+function _splitTextChunks(text, maxLen) {
+  if (text.length <= maxLen) return [text];
+  const sentences = text.match(/[^.!?]+[.!?]+\s*/g) || [text];
+  const chunks = [];
+  let current = "";
+  for (const s of sentences) {
+    if (current.length + s.length > maxLen && current.length > 0) {
+      chunks.push(current.trim());
+      current = s;
+    } else {
+      current += s;
+    }
+  }
+  if (current.trim()) chunks.push(current.trim());
+  return chunks;
+}
+
+// Try Google Translate API
+async function _tryGoogleTranslate(text) {
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(text)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Google HTTP ${res.status}`);
+  const data = await res.json();
+  return data[0].map((seg) => seg[0]).join("");
+}
+
+// Try MyMemory API (supports CORS, 500 char limit per request)
+async function _tryMyMemoryTranslate(text) {
+  const chunks = _splitTextChunks(text, 480);
+  const results = [];
+  for (const chunk of chunks) {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|zh-TW`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`MyMemory HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      results.push(data.responseData.translatedText);
+    } else {
+      throw new Error(`MyMemory error: ${data.responseStatus}`);
+    }
+  }
+  return results.join("");
+}
+
 async function translateToZhTW(text) {
   if (!text || text.trim().length === 0) return text;
   // Skip if already contains mostly Chinese characters
@@ -13,15 +58,18 @@ async function translateToZhTW(text) {
   if (_translationCache[cacheKey]) return _translationCache[cacheKey];
 
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(cacheKey)}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const translated = data[0].map((seg) => seg[0]).join("");
+    // Try Google Translate first, fallback to MyMemory
+    let translated;
+    try {
+      translated = await _tryGoogleTranslate(cacheKey);
+    } catch (e) {
+      console.warn("Google Translate failed, trying MyMemory:", e.message);
+      translated = await _tryMyMemoryTranslate(cacheKey);
+    }
     _translationCache[cacheKey] = translated;
     return translated;
   } catch (e) {
-    console.warn("Translation failed:", e);
+    console.warn("All translation APIs failed:", e);
     return text;
   }
 }
