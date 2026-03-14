@@ -14,11 +14,35 @@ const BATCHES = [
   { id: "winter-2024", label: "W24", display: "2024 冬季批次 (W24)" },
 ];
 
+// Auto-detect the best default batch based on current date
+function getDefaultBatchIndex() {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-12
+  const year = now.getFullYear();
+
+  // YC batch schedule (approximate):
+  // Winter (W): Jan-Mar, Summer (S): Jun-Sep, Fall (F): Sep-Nov, Spring (X): Mar-May
+  let targetLabel;
+  if (month >= 1 && month <= 3) {
+    targetLabel = `W${String(year).slice(2)}`;
+  } else if (month >= 4 && month <= 5) {
+    targetLabel = `X${String(year).slice(2)}`;
+  } else if (month >= 6 && month <= 8) {
+    targetLabel = `S${String(year).slice(2)}`;
+  } else {
+    targetLabel = `F${String(year).slice(2)}`;
+  }
+
+  const idx = BATCHES.findIndex((b) => b.label === targetLabel);
+  return idx >= 0 ? idx : 0;
+}
+
 class YCMonitorApp {
   constructor() {
     this.companies = [];
     this.filteredCompanies = [];
-    this.currentBatch = BATCHES[0].id;
+    this.defaultBatchIndex = getDefaultBatchIndex();
+    this.currentBatch = BATCHES[this.defaultBatchIndex].id;
     this.currentIndustry = "all";
     this.currentView = "list";
     this.searchQuery = "";
@@ -35,7 +59,7 @@ class YCMonitorApp {
   setupBatchSelector() {
     const select = document.getElementById("batchSelect");
     select.innerHTML = BATCHES.map(
-      (b) => `<option value="${b.id}">${b.display}</option>`
+      (b, i) => `<option value="${b.id}" ${i === this.defaultBatchIndex ? "selected" : ""}>${b.display}</option>`
     ).join("");
     select.addEventListener("change", (e) => {
       this.currentBatch = e.target.value;
