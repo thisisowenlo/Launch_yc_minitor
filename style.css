@@ -399,6 +399,48 @@ body {
   flex-shrink: 0;
 }
 
+/* ==================== Favorite Button ==================== */
+.fav-btn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fav-btn:hover {
+  color: #e74c3c;
+}
+
+.fav-btn.fav-active {
+  color: #e74c3c;
+  fill: #e74c3c;
+  stroke: #e74c3c;
+}
+
+.fav-btn svg {
+  fill: inherit;
+  stroke: inherit;
+  stroke-width: inherit;
+}
+
+.fav-btn-modal {
+  padding: 6px;
+}
+
+.fav-chip svg {
+  fill: currentColor;
+}
+
 .company-oneliner {
   font-size: 13px;
   color: var(--text-secondary);

@@ -120,14 +120,188 @@ class YCMonitorApp {
     this.selectedIndustries = new Set(); // empty = "all"
     this.currentView = "list";
     this.searchQuery = "";
+    this.favorites = this._loadFavorites();
+    this.showFavoritesOnly = false;
 
     this.init();
   }
 
   init() {
+    this._parseURL(); // Restore state from URL before loading
     this.setupBatchSelector();
     this.setupSearch();
     this.loadData();
+
+    // Listen for back/forward navigation and modal close
+    window.addEventListener("popstate", () => {
+      // Close modal if open
+      if (document.getElementById("modalOverlay").style.display !== "none") {
+        this.closeModal();
+        return;
+      }
+      this._parseURL();
+      this.renderBatchChips();
+      this._syncSearchInput();
+      this.loadData();
+    });
+  }
+
+  // ==================== URL State Sync ====================
+
+  _updateURL() {
+    const params = new URLSearchParams();
+
+    // Batches
+    const batchLabels = Array.from(this.selectedBatches).map((id) => {
+      const b = BATCHES.find((b) => b.id === id);
+      return b ? b.label : null;
+    }).filter(Boolean);
+    params.set("b", batchLabels.join(","));
+
+    // Search
+    if (this.searchQuery) {
+      params.set("q", this.searchQuery);
+    }
+
+    // Industry filters
+    if (this.selectedIndustries.size > 0) {
+      params.set("ind", Array.from(this.selectedIndustries).join(","));
+    }
+
+    // View
+    if (this.currentView !== "list") {
+      params.set("v", this.currentView);
+    }
+
+    // Favorites filter
+    if (this.showFavoritesOnly) {
+      params.set("fav", "1");
+    }
+
+    const hash = "#" + params.toString();
+    if (window.location.hash !== hash) {
+      history.replaceState(null, "", hash);
+    }
+  }
+
+  _parseURL() {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+
+    const params = new URLSearchParams(hash);
+
+    // Batches
+    const bParam = params.get("b");
+    if (bParam) {
+      const labels = bParam.split(",").filter(Boolean);
+      const ids = labels.map((label) => {
+        const b = BATCHES.find((b) => b.label === label);
+        return b ? b.id : null;
+      }).filter(Boolean);
+      if (ids.length > 0) {
+        this.selectedBatches = new Set(ids);
+      }
+    }
+
+    // Search
+    const q = params.get("q");
+    if (q) {
+      this.searchQuery = q.toLowerCase();
+    }
+
+    // Industry filters
+    const ind = params.get("ind");
+    if (ind) {
+      this.selectedIndustries = new Set(ind.split(",").filter(Boolean));
+    }
+
+    // View
+    const v = params.get("v");
+    if (v && ["list", "trends", "about"].includes(v)) {
+      this.currentView = v;
+    }
+
+    // Favorites filter
+    if (params.get("fav") === "1") {
+      this.showFavoritesOnly = true;
+    }
+  }
+
+  _syncSearchInput() {
+    const input = document.getElementById("searchInput");
+    const clearBtn = document.getElementById("clearSearch");
+    if (input) {
+      input.value = this.searchQuery;
+      clearBtn.style.display = this.searchQuery ? "block" : "none";
+    }
+  }
+
+  // ==================== Favorites ====================
+
+  _loadFavorites() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem("yc_favorites") || "[]"));
+    } catch {
+      return new Set();
+    }
+  }
+
+  _saveFavorites() {
+    localStorage.setItem("yc_favorites", JSON.stringify(Array.from(this.favorites)));
+  }
+
+  _getCompanyId(company) {
+    return company.slug || `${company.name}__${company.batch}`;
+  }
+
+  isFavorite(company) {
+    return this.favorites.has(this._getCompanyId(company));
+  }
+
+  toggleFavorite(companyId, event) {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (this.favorites.has(companyId)) {
+      this.favorites.delete(companyId);
+    } else {
+      this.favorites.add(companyId);
+    }
+    this._saveFavorites();
+
+    // Update the heart button that was clicked
+    document.querySelectorAll(`.fav-btn[data-id="${companyId}"]`).forEach((btn) => {
+      btn.classList.toggle("fav-active", this.favorites.has(companyId));
+    });
+
+    // Update favorites chip count
+    this._updateFavChipCount();
+
+    // If we're showing favorites only and just unfavorited, re-filter
+    if (this.showFavoritesOnly) {
+      this.applyFilters();
+    }
+  }
+
+  _updateFavChipCount() {
+    const chip = document.querySelector('.chip[data-industry="favorites"]');
+    if (chip) {
+      const count = chip.querySelector(".chip-count");
+      if (count) {
+        const favCount = this.companies.filter((c) => this.isFavorite(c)).length;
+        count.textContent = favCount;
+      }
+    }
+  }
+
+  toggleFavoritesFilter() {
+    this.showFavoritesOnly = !this.showFavoritesOnly;
+    const chip = document.querySelector('.chip[data-industry="favorites"]');
+    if (chip) {
+      chip.classList.toggle("active", this.showFavoritesOnly);
+    }
+    this.applyFilters();
+    this._updateURL();
   }
 
   setupBatchSelector() {
@@ -152,17 +326,26 @@ class YCMonitorApp {
     }
     this.renderBatchChips();
     this.selectedIndustries.clear();
+    this.showFavoritesOnly = false;
     this.loadData();
+    this._updateURL();
   }
 
   setupSearch() {
     const input = document.getElementById("searchInput");
     const clearBtn = document.getElementById("clearSearch");
 
+    // Restore search from URL state
+    if (this.searchQuery) {
+      input.value = this.searchQuery;
+      clearBtn.style.display = "block";
+    }
+
     input.addEventListener("input", (e) => {
       this.searchQuery = e.target.value.trim().toLowerCase();
       clearBtn.style.display = this.searchQuery ? "block" : "none";
       this.applyFilters();
+      this._updateURL();
     });
 
     clearBtn.addEventListener("click", () => {
@@ -170,6 +353,7 @@ class YCMonitorApp {
       this.searchQuery = "";
       clearBtn.style.display = "none";
       this.applyFilters();
+      this._updateURL();
     });
   }
 
@@ -198,6 +382,12 @@ class YCMonitorApp {
       this.updateStats();
       this.buildFilterChips();
       this.applyFilters();
+      this._updateURL();
+
+      // Restore view from URL if not list
+      if (this.currentView !== "list") {
+        this.switchView(this.currentView);
+      }
 
       loading.style.display = "none";
     } catch (err) {
@@ -278,7 +468,10 @@ class YCMonitorApp {
     const hasMore = sorted.length > INITIAL_COUNT;
 
     const isAll = this.selectedIndustries.size === 0;
-    let html = `<button class="chip ${isAll ? "active" : ""}" data-industry="all" onclick="app.filterByIndustry('all')">全部<span class="chip-count">${this.companies.length}</span></button>`;
+    const favCount = this.companies.filter((c) => this.isFavorite(c)).length;
+
+    let html = `<button class="chip ${isAll && !this.showFavoritesOnly ? "active" : ""}" data-industry="all" onclick="app.filterByIndustry('all')">全部<span class="chip-count">${this.companies.length}</span></button>`;
+    html += `<button class="chip fav-chip ${this.showFavoritesOnly ? "active" : ""}" data-industry="favorites" onclick="app.toggleFavoritesFilter()"><svg viewBox="0 0 24 24" width="12" height="12" style="margin-right:3px;vertical-align:-1px"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></svg>收藏<span class="chip-count">${favCount}</span></button>`;
 
     visible.forEach(([ind, count]) => {
       const zh = translateIndustry(ind);
@@ -303,6 +496,7 @@ class YCMonitorApp {
   filterByIndustry(industry) {
     if (industry === "all") {
       this.selectedIndustries.clear();
+      this.showFavoritesOnly = false;
     } else {
       if (this.selectedIndustries.has(industry)) {
         this.selectedIndustries.delete(industry);
@@ -314,10 +508,16 @@ class YCMonitorApp {
     const chips = document.getElementById("filterChips");
     this._renderChips(chips, this._allIndustries);
     this.applyFilters();
+    this._updateURL();
   }
 
   applyFilters() {
     let result = [...this.companies];
+
+    // Favorites filter
+    if (this.showFavoritesOnly) {
+      result = result.filter((c) => this.isFavorite(c));
+    }
 
     // Industry filter (multi-select: show companies matching ANY selected industry)
     if (this.selectedIndustries.size > 0) {
@@ -402,6 +602,8 @@ class YCMonitorApp {
     const oneLiner = this.escapeHtml(company.one_liner || "");
     const batch = company.batch || "";
     const batchZh = translateBatch(batch);
+    const companyId = this._getCompanyId(company);
+    const favActive = this.isFavorite(company) ? "fav-active" : "";
 
     // Limit to 2 industry tags + 2 general tags max
     const industries = (company.industries || [])
@@ -427,6 +629,9 @@ class YCMonitorApp {
             <div class="company-name">${name}</div>
             <span class="company-batch">${this.escapeHtml(batchZh)}</span>
           </div>
+          <button class="fav-btn ${favActive}" data-id="${this.escapeHtml(companyId)}" onclick="app.toggleFavorite('${companyId.replace(/'/g, "\\'")}', event)" title="收藏">
+            <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </button>
         </div>
         <div class="company-oneliner" data-translate="${this.escapeHtml(company.one_liner || "")}">${oneLiner}</div>
         <div class="card-tags">${industries}${tags}</div>
@@ -507,13 +712,19 @@ class YCMonitorApp {
 
     const translatingHint = '<span style="color:#999;font-size:12px"> 翻譯中...</span>';
 
+    const companyId = this._getCompanyId(company);
+    const favActive = this.isFavorite(company) ? "fav-active" : "";
+
     content.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         ${logoHtml}
-        <div>
+        <div style="flex:1">
           <div class="company-name">${name}</div>
           <span class="company-batch">${this.escapeHtml(batchZh)}</span>
         </div>
+        <button class="fav-btn fav-btn-modal ${favActive}" data-id="${this.escapeHtml(companyId)}" onclick="app.toggleFavorite('${companyId.replace(/'/g, "\\'")}', event)" title="收藏">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </button>
       </div>
 
       <div class="modal-detail-row">
@@ -622,6 +833,7 @@ class YCMonitorApp {
 
   switchView(view) {
     this.currentView = view;
+    this._updateURL();
 
     // Update nav buttons
     document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -824,13 +1036,6 @@ class YCMonitorApp {
 // Handle modal close on overlay click
 document.getElementById("modalOverlay").addEventListener("click", (e) => {
   if (e.target === e.currentTarget) {
-    app.closeModal();
-  }
-});
-
-// Handle back button to close modal
-window.addEventListener("popstate", () => {
-  if (document.getElementById("modalOverlay").style.display !== "none") {
     app.closeModal();
   }
 });
