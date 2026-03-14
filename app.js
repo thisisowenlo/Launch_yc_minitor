@@ -116,7 +116,7 @@ class YCMonitorApp {
     this.companies = [];
     this.filteredCompanies = [];
     this.defaultBatchIndex = getDefaultBatchIndex();
-    this.currentBatch = BATCHES[this.defaultBatchIndex].id;
+    this.selectedBatches = new Set([BATCHES[this.defaultBatchIndex].id]);
     this.currentIndustry = "all";
     this.currentView = "list";
     this.searchQuery = "";
@@ -131,15 +131,28 @@ class YCMonitorApp {
   }
 
   setupBatchSelector() {
-    const select = document.getElementById("batchSelect");
-    select.innerHTML = BATCHES.map(
-      (b, i) => `<option value="${b.id}" ${i === this.defaultBatchIndex ? "selected" : ""}>${b.display}</option>`
-    ).join("");
-    select.addEventListener("change", (e) => {
-      this.currentBatch = e.target.value;
-      this.currentIndustry = "all";
-      this.loadData();
-    });
+    this.renderBatchChips();
+  }
+
+  renderBatchChips() {
+    const container = document.getElementById("batchChips");
+    container.innerHTML = BATCHES.map((b) => {
+      const active = this.selectedBatches.has(b.id) ? "active" : "";
+      return `<button class="chip batch-chip ${active}" data-batch="${b.id}" onclick="app.toggleBatch('${b.id}')">${b.label}</button>`;
+    }).join("");
+  }
+
+  toggleBatch(batchId) {
+    if (this.selectedBatches.has(batchId)) {
+      // Don't allow deselecting all
+      if (this.selectedBatches.size <= 1) return;
+      this.selectedBatches.delete(batchId);
+    } else {
+      this.selectedBatches.add(batchId);
+    }
+    this.renderBatchChips();
+    this.currentIndustry = "all";
+    this.loadData();
   }
 
   setupSearch() {
@@ -170,10 +183,17 @@ class YCMonitorApp {
     companyList.innerHTML = "";
 
     try {
-      const url = `${API_BASE}/batches/${this.currentBatch}.json`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      this.companies = await res.json();
+      // Fetch all selected batches in parallel
+      const batchIds = Array.from(this.selectedBatches);
+      const results = await Promise.all(
+        batchIds.map(async (batchId) => {
+          const url = `${API_BASE}/batches/${batchId}.json`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+      );
+      this.companies = results.flat();
 
       this.updateStats();
       this.buildFilterChips();
@@ -185,7 +205,6 @@ class YCMonitorApp {
       loading.style.display = "none";
       error.style.display = "block";
 
-      // Try fallback: load from all.json and filter
       this.tryFallback();
     }
   }
@@ -197,13 +216,14 @@ class YCMonitorApp {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const all = await res.json();
 
-      // Find the batch label for current selection
-      const batchInfo = BATCHES.find((b) => b.id === this.currentBatch);
-      if (batchInfo) {
-        this.companies = all.filter(
-          (c) => c.batch === batchInfo.label
-        );
-      }
+      const selectedLabels = new Set(
+        Array.from(this.selectedBatches).map((id) => {
+          const b = BATCHES.find((b) => b.id === id);
+          return b ? b.label : null;
+        }).filter(Boolean)
+      );
+
+      this.companies = all.filter((c) => selectedLabels.has(c.batch));
 
       if (this.companies.length > 0) {
         document.getElementById("error").style.display = "none";
@@ -218,10 +238,11 @@ class YCMonitorApp {
 
   updateStats() {
     document.getElementById("totalCount").textContent = this.companies.length;
-    const batchInfo = BATCHES.find((b) => b.id === this.currentBatch);
-    document.getElementById("batchName").textContent = batchInfo
-      ? batchInfo.label
-      : "-";
+    const labels = Array.from(this.selectedBatches).map((id) => {
+      const b = BATCHES.find((b) => b.id === id);
+      return b ? b.label : "";
+    }).filter(Boolean);
+    document.getElementById("batchName").textContent = labels.join(", ") || "-";
     document.getElementById("lastSync").textContent = new Date().toLocaleDateString("zh-TW", {
       month: "short",
       day: "numeric",

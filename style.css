@@ -174,16 +174,24 @@ body {
   cursor: pointer;
 }
 
-.batch-selector select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
-  background: var(--bg);
-  outline: none;
-  color: var(--text);
-  cursor: pointer;
+
+.batch-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.batch-chips::-webkit-scrollbar { display: none; }
+
+.batch-chip.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
 }
 
 .filter-chips {
@@ -730,11 +738,6 @@ body {
     flex-direction: row;
     gap: 8px;
     align-items: center;
-  }
-
-  .batch-selector {
-    width: 220px;
-    flex-shrink: 0;
   }
 
   .company-list {
