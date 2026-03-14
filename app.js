@@ -244,18 +244,39 @@ class YCMonitorApp {
       });
     });
 
-    // Sort by count descending
     const sorted = Object.entries(industryCount).sort((a, b) => b[1] - a[1]);
+    this._allIndustries = sorted;
+    this._chipsExpanded = false;
+
+    this._renderChips(chips, sorted);
+  }
+
+  _renderChips(container, sorted) {
+    const INITIAL_COUNT = 8;
+    const showAll = this._chipsExpanded;
+    const visible = showAll ? sorted : sorted.slice(0, INITIAL_COUNT);
+    const hasMore = sorted.length > INITIAL_COUNT;
 
     let html = `<button class="chip ${this.currentIndustry === "all" ? "active" : ""}" data-industry="all" onclick="app.filterByIndustry('all')">全部<span class="chip-count">${this.companies.length}</span></button>`;
 
-    sorted.forEach(([ind, count]) => {
+    visible.forEach(([ind, count]) => {
       const zh = translateIndustry(ind);
       const active = this.currentIndustry === ind ? "active" : "";
       html += `<button class="chip ${active}" data-industry="${ind}" onclick="app.filterByIndustry('${ind.replace(/'/g, "\\'")}')">${zh}<span class="chip-count">${count}</span></button>`;
     });
 
-    chips.innerHTML = html;
+    if (hasMore) {
+      const label = showAll ? "收起" : `+${sorted.length - INITIAL_COUNT} 更多`;
+      html += `<button class="chip-toggle" onclick="app.toggleChips()">${label}</button>`;
+    }
+
+    container.innerHTML = html;
+  }
+
+  toggleChips() {
+    this._chipsExpanded = !this._chipsExpanded;
+    const chips = document.getElementById("filterChips");
+    this._renderChips(chips, this._allIndustries);
   }
 
   filterByIndustry(industry) {
@@ -353,15 +374,17 @@ class YCMonitorApp {
     const oneLiner = this.escapeHtml(company.one_liner || "");
     const batch = company.batch || "";
     const batchZh = translateBatch(batch);
+
+    // Limit to 2 industry tags + 2 general tags max
     const industries = (company.industries || [])
+      .slice(0, 2)
       .map((i) => `<span class="tag tag-industry">${this.escapeHtml(translateIndustry(i))}</span>`)
       .join("");
     const tags = (company.tags || [])
-      .slice(0, 3)
+      .slice(0, 2)
       .map((t) => `<span class="tag">${this.escapeHtml(translateIndustry(t))}</span>`)
       .join("");
 
-    // Generate logo: use first letter as fallback
     const initial = name.charAt(0).toUpperCase();
     const logoUrl = company.small_logo_thumb_url || "";
     const logoHtml = logoUrl
@@ -387,7 +410,8 @@ class YCMonitorApp {
     const container = document.getElementById("industrySummary");
     const chart = document.getElementById("industryChart");
 
-    if (this.currentView !== "list" || this.companies.length === 0) {
+    // Only show when "全部" filter is active and there are companies
+    if (this.currentView !== "list" || this.companies.length === 0 || this.currentIndustry !== "all" || this.searchQuery) {
       container.style.display = "none";
       return;
     }
