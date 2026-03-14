@@ -1,5 +1,31 @@
 const API_BASE = "https://yc-oss.github.io/api";
 
+// Translation cache and function for English -> Traditional Chinese
+const _translationCache = {};
+
+async function translateToZhTW(text) {
+  if (!text || text.trim().length === 0) return text;
+  // Skip if already contains mostly Chinese characters
+  const chineseRatio = (text.match(/[\u4e00-\u9fff]/g) || []).length / text.length;
+  if (chineseRatio > 0.3) return text;
+
+  const cacheKey = text.trim();
+  if (_translationCache[cacheKey]) return _translationCache[cacheKey];
+
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=zh-TW&dt=t&q=${encodeURIComponent(cacheKey)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const translated = data[0].map((seg) => seg[0]).join("");
+    _translationCache[cacheKey] = translated;
+    return translated;
+  } catch (e) {
+    console.warn("Translation failed:", e);
+    return text;
+  }
+}
+
 // Available batches (most recent first)
 const BATCHES = [
   { id: "summer-2026", label: "S26", display: "2026 夏季批次 (S26)" },
@@ -252,6 +278,26 @@ class YCMonitorApp {
     list.innerHTML = this.filteredCompanies
       .map((company, i) => this.renderCard(company, i))
       .join("");
+
+    // Translate card one_liners asynchronously
+    this._translateCardOneLiners();
+  }
+
+  async _translateCardOneLiners() {
+    const cards = document.querySelectorAll(".company-oneliner[data-translate]");
+    // Translate in small batches to avoid overwhelming the API
+    const batchSize = 5;
+    for (let i = 0; i < cards.length; i += batchSize) {
+      const batch = Array.from(cards).slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (el) => {
+          const original = el.getAttribute("data-translate");
+          if (!original) return;
+          const translated = await translateToZhTW(original);
+          el.textContent = translated;
+        })
+      );
+    }
   }
 
   renderCard(company, index) {
@@ -283,7 +329,7 @@ class YCMonitorApp {
             <span class="company-batch">${this.escapeHtml(batchZh)}</span>
           </div>
         </div>
-        <div class="company-oneliner">${oneLiner}</div>
+        <div class="company-oneliner" data-translate="${this.escapeHtml(company.one_liner || "")}">${oneLiner}</div>
         <div class="card-tags">${industries}${tags}</div>
       </div>
     `;
@@ -338,10 +384,8 @@ class YCMonitorApp {
 
     const name = this.escapeHtml(company.name || "Unknown");
     const batchZh = translateBatch(company.batch);
-    const oneLiner = this.escapeHtml(company.one_liner || "無描述");
-    const longDesc = this.escapeHtml(
-      company.long_description || company.one_liner || "暫無詳細描述"
-    );
+    const oneLiner = company.one_liner || "無描述";
+    const longDesc = company.long_description || company.one_liner || "暫無詳細描述";
     const website = company.website || "";
     const ycUrl = company.url
       ? `https://www.ycombinator.com${company.url}`
@@ -363,6 +407,8 @@ class YCMonitorApp {
       ? `<img src="${logoUrl}" alt="${name}" style="width:60px;height:60px;border-radius:14px;" onerror="this.style.display='none'">`
       : `<div style="width:60px;height:60px;border-radius:14px;background:#f0f0f5;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;color:#666">${initial}</div>`;
 
+    const translatingHint = '<span style="color:#999;font-size:12px"> 翻譯中...</span>';
+
     content.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         ${logoHtml}
@@ -373,13 +419,13 @@ class YCMonitorApp {
       </div>
 
       <div class="modal-detail-row">
-        <div class="modal-detail-label">簡介</div>
-        <div class="modal-detail-value">${oneLiner}</div>
+        <div class="modal-detail-label">簡介${translatingHint}</div>
+        <div class="modal-detail-value" id="modal-oneliner">${this.escapeHtml(oneLiner)}</div>
       </div>
 
       <div class="modal-detail-row">
-        <div class="modal-detail-label">詳細說明</div>
-        <div class="modal-detail-value">${longDesc}</div>
+        <div class="modal-detail-label">詳細說明${translatingHint}</div>
+        <div class="modal-detail-value" id="modal-longdesc">${this.escapeHtml(longDesc)}</div>
       </div>
 
       ${
@@ -444,6 +490,31 @@ class YCMonitorApp {
 
     overlay.style.display = "flex";
     document.body.style.overflow = "hidden";
+
+    // Translate one_liner and long_description asynchronously
+    this._translateModalTexts(oneLiner, longDesc);
+  }
+
+  async _translateModalTexts(oneLiner, longDesc) {
+    const [translatedOneLiner, translatedLongDesc] = await Promise.all([
+      translateToZhTW(oneLiner),
+      translateToZhTW(longDesc),
+    ]);
+
+    const oneLinerEl = document.getElementById("modal-oneliner");
+    const longDescEl = document.getElementById("modal-longdesc");
+
+    if (oneLinerEl) {
+      oneLinerEl.textContent = translatedOneLiner;
+      // Remove translating hint from label
+      const label = oneLinerEl.closest(".modal-detail-row")?.querySelector(".modal-detail-label");
+      if (label) label.innerHTML = "簡介";
+    }
+    if (longDescEl) {
+      longDescEl.textContent = translatedLongDesc;
+      const label = longDescEl.closest(".modal-detail-row")?.querySelector(".modal-detail-label");
+      if (label) label.innerHTML = "詳細說明";
+    }
   }
 
   closeModal() {
